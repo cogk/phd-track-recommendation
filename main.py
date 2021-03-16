@@ -1,0 +1,3 @@
+import honir
+
+honir.main()
