@@ -24,3 +24,7 @@ def main():
     w_ta_connective_not_tb = est_r_ta_connective_not_tb - est_r_ta
     print("-> weight('dark hero' but not 'surreal', user=11)",
           w_ta_connective_not_tb)
+    
+    print()
+    filteredTags = d.filter_data()
+    print(filteredTags.head())

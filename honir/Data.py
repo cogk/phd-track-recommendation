@@ -113,3 +113,25 @@ class Data:
         )
 
         return mean_rating_by_user_for_tag_pair
+        
+        
+    def filter_data(self):
+        print('filtering on tag vocabulary...')
+        print()
+        print()
+        
+        T = self.tags
+
+        nb_users = T[["userId", "tag"]].drop_duplicates().tag.value_counts().compute()
+        
+        # only keep tags used by more than 5 different users
+        nb_users = nb_users.where(lambda x : x>=5).dropna()
+        T_5 = T.loc[T['tag'].isin(nb_users.keys())]
+        
+        nb_movies = T_5[["movieId", "tag"]].drop_duplicates().tag.value_counts().compute()
+        
+        # only keep tags used on more than 2 different movies
+        nb_movies = nb_movies.where(lambda x : x>=2).dropna()
+        T_2 = T_5.loc[T['tag'].isin(nb_movies.keys())]
+        
+        return T_2
