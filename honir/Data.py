@@ -1,7 +1,6 @@
 from os.path import normpath
 import dask.dataframe as dd
 
-
 def import_csv(path, dtype):
     df = dd.read_csv(path, dtype=dtype, assume_missing=True)
     df.compute()
@@ -121,17 +120,47 @@ class Data:
         print()
         
         T = self.tags
-
-        nb_users = T[["userId", "tag"]].drop_duplicates().tag.value_counts().compute()
         
         # only keep tags used by more than 5 different users
-        nb_users = nb_users.where(lambda x : x>=5).dropna()
-        T_5 = T.loc[T['tag'].isin(nb_users.keys())]
+        tags_users = T[['tag', 'userId']].drop_duplicates().tag.value_counts().compute()
+        tags_users = tags_users.where(lambda x : x>=5).dropna()
+        T_tags_users = T.loc[T['tag'].isin(tags_users.keys())]
         
-        nb_movies = T_5[["movieId", "tag"]].drop_duplicates().tag.value_counts().compute()
+        print('tags_users')
+        print(tags_users.head())
+        print()
+        print()
         
-        # only keep tags used on more than 2 different movies
-        nb_movies = nb_movies.where(lambda x : x>=2).dropna()
-        T_2 = T_5.loc[T['tag'].isin(nb_movies.keys())]
+        # only keep tags used on more than 2 different movies        
+        tags_movies = T_tags_users[['tag', 'movieId']].drop_duplicates().tag.value_counts().compute()
+        tags_movies = tags_movies.where(lambda x : x>=2).dropna()
+        T_tags_movies = T_tags_users.loc[T_tags_users['tag'].isin(tags_movies.keys())]
         
-        return T_2
+        print('tags_movies')
+        print(tags_movies.head())
+        print()
+        print()
+
+        # only keep movies that have at least 2 tags
+        movies_tags = T_tags_movies[['movieId', 'tag']].drop_duplicates().movieId.value_counts().compute()
+        movies_tags = movies_tags.where(lambda x : x>=2).dropna()
+        T_movies_tags = T_tags_movies.loc[T_tags_movies['movieId'].isin(movies_tags.keys())]
+        
+        print('movies_tags')
+        print(movies_tags.head())
+        print(movies_tags.tail())
+        print()
+        print()
+        
+        # for each movie, only keep tags that have been assigned by at least 2 users
+        movies_tags_users = T_movies_tags[['movieId', 'tag', 'userId']] .drop_duplicates().groupby(['movieId', 'tag']).size().compute()
+        movies_tags_users = movies_tags_users.where(lambda x : x>=2).dropna()
+        boolResult = T_movies_tags[['movieId','tag']].apply(tuple, 1, meta=('object')).isin(movies_tags_users.keys())
+        T_movies_tags_users = T_movies_tags.loc[boolResult]
+        
+        return T_movies_tags_users
+        
+        
+        
+        
+        

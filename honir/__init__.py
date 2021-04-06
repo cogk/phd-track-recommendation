@@ -10,7 +10,7 @@ def main():
     # print()
     # print(d.tags.head())
     # print()
-
+    '''
     est_r_ta = d.estimated_rating_for_tag_for_user(11, 'dark hero')
     print("-> weight('dark hero', user=11)", est_r_ta)
 
@@ -24,7 +24,8 @@ def main():
     w_ta_connective_not_tb = est_r_ta_connective_not_tb - est_r_ta
     print("-> weight('dark hero' but not 'surreal', user=11)",
           w_ta_connective_not_tb)
-    
+    '''
     print()
     filteredTags = d.filter_data()
     print(filteredTags.head())
+    print(len(filteredTags))
