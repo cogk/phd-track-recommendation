@@ -1,5 +1,6 @@
 from os.path import normpath
 import dask.dataframe as dd
+import math
 
 
 def import_csv(path, dtype):
@@ -53,6 +54,9 @@ class Data:
             on='movieId'
         )[M.columns].drop_duplicates()
 
+        if len(movies_with_tag) == 0:
+            return 0
+
         movies_rated_by_user = dd.merge(
             movies_with_tag,
             R[R.userId == userId],
@@ -69,26 +73,9 @@ class Data:
         return mean_rating_by_user_for_tag
 
     def estimated_rating_for_tags_for_user(self, userId, tagA, tagB):
-        T, R, M = self.tags, self.ratings, self.movies
-
-        ids_movies_with_both_tags = dd.merge(
-            T[T.tag == tagA],
-            T[T.tag == tagB],
-            on="movieId"
-        )[('movieId')]
-
-        ratings = dd.merge(
-            R[R.userId == userId],
-            ids_movies_with_both_tags,
-            on='movieId'
-        )['rating']
-
-        normalized_ratings = normalize_rating(ratings)
-
-        mean_rating_by_user_for_tag_pair = (
-            normalized_ratings.sum().compute() / len(ids_movies_with_both_tags)
-        )
-
+        T = self.tags
+        mean_rating_by_user_for_tag_pair = self.estimated_rating_for_tags_for_user_filter(
+            userId, T.tag == tagA, T.tag == tagB)
         return mean_rating_by_user_for_tag_pair
 
     def estimated_rating_for_tags_for_user_filter(self, userId, f1, f2):
@@ -113,6 +100,84 @@ class Data:
         )
 
         return mean_rating_by_user_for_tag_pair
+
+    def utility_single_tag(self, userId, tag):
+        print(tag)
+        T, R, M = self.tags, self.ratings, self.movies
+
+        # coverage
+        Ir = dd.merge(M, R[R.userId == userId], on='movieId').drop(
+            columns=['userId', 'timestamp'])  # movies, rated by user
+
+        lenIr = len(Ir)
+        if lenIr == 0:
+            return 0
+
+        Irt = dd.merge(Ir, T[(T.userId == userId) & (T.tag == tag)]
+                       ['movieId'].drop_duplicates(), on='movieId')  # movies, rated by user, tagged t by user
+
+        lenIrt = len(Irt)
+        if lenIrt == 0:
+            return 0
+
+        cov = min(lenIrt, lenIr - lenIrt) / lenIr
+
+        # w_t = self.estimated_rating_for_tag_for_user(userId, tag)
+        ratings = Irt['rating']
+        w_t = normalize_rating(ratings).sum().compute() / len(Irt)
+
+        # statistical significance
+        sigma_t = Irt.rating.var().compute()
+        if sigma_t == 0:
+            return 0
+        sig = min(2, abs(w_t) / (sigma_t / math.sqrt(lenIrt)))
+
+        return cov * sig * abs(w_t)
+
+    # 4. Identifying user preferences
+    def selected_statements(self, userId):
+        T, R, M = self.tags, self.ratings, self.movies
+        parameters = {'min_items': 0, 'max_p_value': 0}  # \Theta
+
+        Ir = dd.merge(M, R[R.userId == userId], on='movieId').drop(
+            columns=['userId', 'timestamp'])  # movies, rated by user
+        lenIr = len(Ir)
+        TT = T[T.userId == userId]
+
+        def f(tag):
+            print(tag)
+            # movies, rated by user, tagged t by user
+            Irt = dd.merge(Ir, TT[TT.tag == tag]
+                           ['movieId'].drop_duplicates(), on='movieId')
+
+            lenIrt = len(Irt)
+            if lenIrt == 0:
+                return 0
+
+            cov = min(lenIrt, lenIr - lenIrt) / lenIr
+
+            # w_t = self.estimated_rating_for_tag_for_user(userId, tag)
+            ratings = Irt['rating']
+            w_t = normalize_rating(ratings).sum().compute() / len(Irt)
+
+            # statistical significance
+            sigma_t = Irt.rating.var().compute()
+            if sigma_t == 0:
+                return 0
+            sig = min(2, abs(w_t) / (sigma_t / math.sqrt(lenIrt)))
+
+            return cov * sig * abs(w_t)
+
+        # 4.2 Generate candidate statements
+        tags = T.tag.dropna().drop_duplicates()
+        # tags = tags.head(n=125)
+        print(len(tags), 'tags')
+        utility = tags.map(f)
+        utility.name = "utility"
+        z = dd.concat([tags, utility], axis=1).reset_index()
+        C = z.nlargest(10, 'utility')
+
+        return C
 
     def filter_data(self):
         print('filtering on tag vocabulary...')
