@@ -1,6 +1,7 @@
 from os.path import normpath
 import dask.dataframe as dd
 import math
+import random
 
 
 def import_csv(path, dtype):
@@ -11,6 +12,14 @@ def import_csv(path, dtype):
 
 def normalize_rating(n_stars: float) -> float:
     return (n_stars - 2.5) / 2.5
+
+
+def sample_data_frame_count(df, n_samples):
+    return df.sample(frac=(n_samples/len(df)))
+
+
+def sample_data_frame_frac(df, frac):
+    return df.sample(frac=frac)
 
 
 class Data:
@@ -24,7 +33,7 @@ class Data:
             'title': 'str',
             'genres': 'str'
         })
-        print(len(self.movies), 'movies')
+        self.movies = sample_data_frame_frac(self.movies, 0.1)
 
         self.ratings = import_csv(dir + '/ratings.csv', {
             'userId': 'int64',
@@ -32,7 +41,7 @@ class Data:
             'rating': 'float64',
             'timestamp': 'int64'
         })
-        print(len(self.ratings), 'ratings')
+        self.ratings = sample_data_frame_frac(self.ratings, 0.1)
 
         # 5 utilisateurs différents, 2 films différents
         self.tags = import_csv(dir + '/tags.csv', {
@@ -41,9 +50,9 @@ class Data:
             'tag': 'str',
             'timestamp': 'int64'
         })
-        print(len(self.tags), 'tags')
-        print()
-        print()
+        self.tags = sample_data_frame_frac(self.tags, 0.1)
+
+        self.filter_data()
 
     def estimated_rating_for_tag_for_user(self, userId, tag):
         T, R, M = self.tags, self.ratings, self.movies
@@ -102,7 +111,6 @@ class Data:
         return mean_rating_by_user_for_tag_pair
 
     def utility_single_tag(self, userId, tag):
-        print(tag)
         T, R, M = self.tags, self.ratings, self.movies
 
         # coverage
@@ -132,7 +140,9 @@ class Data:
             return 0
         sig = min(2, abs(w_t) / (sigma_t / math.sqrt(lenIrt)))
 
-        return cov * sig * abs(w_t)
+        U = cov * sig * abs(w_t)
+        print(tag, U)
+        return U
 
     # 4. Identifying user preferences
     def selected_statements(self, userId):
@@ -145,13 +155,16 @@ class Data:
         TT = T[T.userId == userId]
 
         def f(tag):
-            print(tag)
             # movies, rated by user, tagged t by user
             Irt = dd.merge(Ir, TT[TT.tag == tag]
                            ['movieId'].drop_duplicates(), on='movieId')
+            # movies, rated by user, tagged t by anyone
+            # Irt = dd.merge(Ir, T[T.tag == tag]
+            #                ['movieId'].drop_duplicates(), on='movieId')
 
             lenIrt = len(Irt)
             if lenIrt == 0:
+                print(tag, 'lenIrt == 0')
                 return 0
 
             cov = min(lenIrt, lenIr - lenIrt) / lenIr
@@ -163,19 +176,22 @@ class Data:
             # statistical significance
             sigma_t = Irt.rating.var().compute()
             if sigma_t == 0:
+                print(tag, 'sigma_t == 0')
                 return 0
             sig = min(2, abs(w_t) / (sigma_t / math.sqrt(lenIrt)))
 
-            return cov * sig * abs(w_t)
+            U = cov * sig * abs(w_t)
+            print(tag, f"{U=} {cov=} {sig=} {w_t=}")
+            return U
 
         # 4.2 Generate candidate statements
         tags = T.tag.dropna().drop_duplicates()
-        # tags = tags.head(n=125)
+        tags = tags.head(n=15)
         print(len(tags), 'tags')
         utility = tags.map(f)
         utility.name = "utility"
-        z = dd.concat([tags, utility], axis=1).reset_index()
-        C = z.nlargest(10, 'utility')
+        C = dd.concat([tags, utility], axis=1).reset_index().nlargest(
+            10, 'utility')
 
         return C
 
