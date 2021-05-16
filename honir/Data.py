@@ -54,7 +54,7 @@ class Data:
         })
         self.tags = sample_data_frame_frac(self.tags, 0.1)
 
-        self.filter_data()
+        self.filter_tags()
 
     def estimated_rating_for_tag_for_user(self, userId, tag):
         T, R, M = self.tags, self.ratings, self.movies
@@ -196,20 +196,12 @@ class Data:
             10, 'utility')
 
         return C
-
-<<<<<<< HEAD
-        return mean_rating_by_user_for_tag_pair
         
-    def filter_data(self):
+    def filter_tags(self):
         print('filtering...')
-        
-=======
-    def filter_data(self):
-        print('filtering on tag vocabulary...')
         print()
         print()
 
->>>>>>> c38efb49a2e247744ad8cbd292d78829402c7b2c
         T = self.tags
 
         # only keep tags used by more than 5 different users
@@ -217,7 +209,6 @@ class Data:
                        ].drop_duplicates().tag.value_counts().compute()
         tags_users = tags_users.where(lambda x: x >= 5).dropna()
         T_tags_users = T.loc[T['tag'].isin(tags_users.keys())]
-<<<<<<< HEAD
         
         # only keep tags used on more than 2 different movies        
         tags_movies = T_tags_users[['tag', 'movieId']].drop_duplicates().tag.value_counts().compute()
@@ -237,60 +228,17 @@ class Data:
         
         # filtering inappropriate and non-relevant tags
             
-        testArray = T_movies_tags_users['tag'].values.compute()
+        arrayToFilter = T_movies_tags_users['tag'].values.compute()
         
-        testArrayFiltered = [tag for tag in testArray if (not profanity.contains_profanity(tag))]
+        arrayFiltered = [tag for tag in arrayToFilter if (not profanity.contains_profanity(tag))]
 
         blacklist = open('honir/blacklist.csv', 'r').read().split(';')
         irrelevant = open('honir/irrelevant-tags.csv', 'r').read().split(';')
         
         profanity.load_words(blacklist+irrelevant)
         
-        testArrayFiltered = [tag for tag in testArrayFiltered if (not profanity.contains_profanity(tag))]
+        arrayFiltered = [tag for tag in arrayFiltered if (not profanity.contains_profanity(tag))]
 
-        T_inappr_tags = dd.from_pandas(pd.DataFrame(testArrayFiltered), npartitions=2)
+        T_inappr_tags = T_movies_tags_users.loc[T_movies_tags_users['tag'].isin(arrayFiltered)]
         
-        return T_movies_tags_users
-        
-=======
-
-        print('tags_users')
-        print(tags_users.head())
-        print()
-        print()
-
-        # only keep tags used on more than 2 different movies
-        tags_movies = T_tags_users[['tag', 'movieId']
-                                   ].drop_duplicates().tag.value_counts().compute()
-        tags_movies = tags_movies.where(lambda x: x >= 2).dropna()
-        T_tags_movies = T_tags_users.loc[T_tags_users['tag'].isin(
-            tags_movies.keys())]
-
-        print('tags_movies')
-        print(tags_movies.head())
-        print()
-        print()
-
-        # only keep movies that have at least 2 tags
-        movies_tags = T_tags_movies[['movieId', 'tag']].drop_duplicates(
-        ).movieId.value_counts().compute()
-        movies_tags = movies_tags.where(lambda x: x >= 2).dropna()
-        T_movies_tags = T_tags_movies.loc[T_tags_movies['movieId'].isin(
-            movies_tags.keys())]
-
-        print('movies_tags')
-        print(movies_tags.head())
-        print(movies_tags.tail())
-        print()
-        print()
-
-        # for each movie, only keep tags that have been assigned by at least 2 users
-        movies_tags_users = T_movies_tags[['movieId', 'tag', 'userId']] .drop_duplicates(
-        ).groupby(['movieId', 'tag']).size().compute()
-        movies_tags_users = movies_tags_users.where(lambda x: x >= 2).dropna()
-        boolResult = T_movies_tags[['movieId', 'tag']].apply(
-            tuple, 1, meta=('object')).isin(movies_tags_users.keys())
-        T_movies_tags_users = T_movies_tags.loc[boolResult]
-
-        return T_movies_tags_users
->>>>>>> c38efb49a2e247744ad8cbd292d78829402c7b2c
+        return T_inappr_tags

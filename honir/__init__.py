@@ -32,7 +32,3 @@ def main():
     print('.selected_statements(userId=' + str(userId) + ')')
     C = d.selected_statements(userId)
     print(C.head())
-    
-    print()
-    filteredTags = d.filter_data()
-    print(filteredTags.head())
